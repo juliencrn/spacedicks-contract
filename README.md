@@ -28,3 +28,18 @@ truffle console
 > compile
 > migrate --reset
 ```
+
+## Rinkeby testnet deploy
+
+Requirements
+- [Infura](https://infura.io/) account with a project on rinkeby network
+- A ETH address on rinkeby network (MetaMask)
+- Ask some test ETH on a [faucet](https://faucet.rinkeby.io/)
+
+Then copy the `.env.example` into `.env` and update env variables.
+
+```bash
+truffle test
+truffle compile
+truffle migrate --network rinkeby
+```
