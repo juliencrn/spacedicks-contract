@@ -17,11 +17,13 @@
  * phrase from a file you've .gitignored so it doesn't accidentally become public.
  *
  */
-
-// const HDWalletProvider = require('@truffle/hdwallet-provider');
+require('dotenv/config')
+const HDWalletProvider = require('@truffle/hdwallet-provider');
 //
 const path = require('path');
 // const mnemonic = fs.readFileSync(".secret").toString().trim();
+
+const RPC_URL = `https://${process.env.NETWORK}.infura.io/v3/${process.env.INFURA_TOKEN}`
 
 module.exports = {
   /**
@@ -59,6 +61,14 @@ module.exports = {
     // },
     // Useful for deploying to a public network.
     // NB: It's important to wrap the provider as a function.
+    rinkeby: {
+      provider: () => {
+        return new HDWalletProvider(process.env.MNEMONIC, RPC_URL)
+      },
+      network_id: '4',
+      skipDryRun: true,     // Skip dry run before migrations? (default: false for public nets )
+      from: "0x65b40F507CA181229a2B4cf8FA27267C66A62320"
+    }
     // ropsten: {
     // provider: () => new HDWalletProvider(mnemonic, `https://ropsten.infura.io/v3/YOUR-PROJECT-ID`),
     // network_id: 3,       // Ropsten's id

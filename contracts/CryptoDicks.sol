@@ -7,12 +7,14 @@ import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/utils/Counters.sol";
 import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 import "@openzeppelin/contracts/utils/math/SafeCast.sol";
+import "@chainlink/contracts/src/v0.8/VRFConsumerBase.sol";
+
 import "./SafeMath8.sol";
 
 /// @title The main CryptoDicks ERC721 smart contract.
 /// @author juliencrn
 /// @dev Work in progress, not production ready yet.
-contract CryptoDicks is Ownable, ERC721 {
+contract CryptoDicks is Ownable, ERC721, VRFConsumerBase {
     // Libs
     using Counters for Counters.Counter;
     using SafeMath for uint256;
@@ -21,6 +23,15 @@ contract CryptoDicks is Ownable, ERC721 {
 
     Counters.Counter internal _currentSupply;
     Counters.Counter internal _randomNonce;
+
+    // Variable to have a random number from Chainlink
+    bytes32 internal keyHash;
+    uint256 internal fee;
+    uint256 public randomResult;
+    // rinkeby: 0xb3dCcb4Cf7a26f6cf6B120Cf5A73875B7BBc655B
+    address public VRFCoordinator;
+    // rinkeby: 0x01BE23585060835E02B77ef475b0Cc51aA1e0709a
+    address public LinkToken;
 
     // Contract settings
     uint256 public totalSupply = 10_000;
@@ -41,11 +52,62 @@ contract CryptoDicks is Ownable, ERC721 {
     // Mapping metadata dna to boolean
     mapping(uint256 => bool) private _dnaExists;
 
-    constructor() ERC721("CryptoDicks", "DICK") {
+    // dev purpose
+    // TODO: Remove
+    event ReceiveRandom(uint256 randomNumber);
+
+    // Mapping user address with random number
+    // mapping(address => uint256) public userToRandomNumber;
+
+    /**
+     * Constructor inherits VRFConsumerBase
+     *
+     * Network: Rinkeby
+     * Chainlink VRF Coordinator address: 0xb3dCcb4Cf7a26f6cf6B120Cf5A73875B7BBc655B
+     * LINK token address:                0x01BE23585060835E02B77ef475b0Cc51aA1e0709
+     * Key Hash: 0x2ed0feb3e7fd2022120aa84fab1945545a9f2ffc9076fd6156fa96eaff4c1311
+     */
+    constructor(
+        address _VRFCoordinator,
+        address _LinkToken,
+        bytes32 _keyhash
+    )
+        VRFConsumerBase(_VRFCoordinator, _LinkToken)
+        ERC721("CryptoDicks", "DICK")
+    {
+        // Chainlink stuff
+        VRFCoordinator = _VRFCoordinator;
+        LinkToken = _LinkToken;
+        keyHash = _keyhash;
+        fee = 0.1 * 10**18; // 0.1 LINK
+
         // Mint my own NFT tokens.
         for (uint256 i = 0; i < 10; i++) {
             mint();
         }
+    }
+
+    function requestNewRandomNumber()
+        public
+        returns (
+            // uint256 userProvidedSeed,
+            // string memory name
+            bytes32
+        )
+    {
+        require(
+            LINK.balanceOf(address(this)) >= fee,
+            "Not enough LINK - fill contract with faucet"
+        );
+        return requestRandomness(keyHash, fee);
+    }
+
+    function fulfillRandomness(bytes32 _requestId, uint256 _randomNumber)
+        internal
+        override
+    {
+        emit ReceiveRandom(_randomNumber);
+        randomResult = _randomNumber;
     }
 
     /// Allow user to mint a token
@@ -82,24 +144,41 @@ contract CryptoDicks is Ownable, ERC721 {
         return _currentBaseURI;
     }
 
+    /// Allow owner to set new baseURI
+    function setBaseURI(string memory _baseUri) public onlyOwner {
+        _currentBaseURI = _baseUri;
+    }
+
+    /// Allow owner to set new mint fee price, ether price will change.
+    function setClaimFee(uint256 _newPrice) external onlyOwner {
+        claimFee = _newPrice;
+    }
+
+    /// Allow owner to withdraw contract balance.
+    /// @dev Ether are stored in the contract when "payable->transfer" is invoked.
+    /// TODO Add unit test
+    function withdraw() external payable onlyOwner {
+        payable(owner()).transfer(address(this).balance);
+    }
+
     /// For a a given token ID, returns its metadata
     function get(uint256 _tokenId)
         external
         view
         returns (
-            uint8 background,
-            uint8 skin,
-            uint8 hat,
-            uint8 eye
+            uint8,
+            uint8,
+            uint8,
+            uint8
         )
     {
         require(_exists(_tokenId), "Token not minted yet");
-        Metadata memory metadata = idToMetadata[_tokenId];
-
-        background = metadata.background;
-        skin = metadata.skin;
-        hat = metadata.hat;
-        eye = metadata.eye;
+        return (
+            idToMetadata[_tokenId].background,
+            idToMetadata[_tokenId].skin,
+            idToMetadata[_tokenId].hat,
+            idToMetadata[_tokenId].eye
+        );
     }
 
     /// @return the current supply
@@ -165,16 +244,18 @@ contract CryptoDicks is Ownable, ERC721 {
     function _generateRandomMetadata()
         internal
         returns (
-            uint8 background,
-            uint8 skin,
-            uint8 hat,
-            uint8 eye
+            uint8,
+            uint8,
+            uint8,
+            uint8
         )
     {
-        background = _randomWithRarety();
-        skin = _randomWithRarety();
-        hat = _randomUntil(3);
-        eye = _randomUntil(3);
+        return (
+            _randomWithRarety(),
+            _randomWithRarety(),
+            _randomUntil(3),
+            _randomUntil(3)
+        );
     }
 
     /// @return random uint8 between 0-n with rarety level
